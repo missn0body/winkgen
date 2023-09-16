@@ -1,7 +1,7 @@
 # winkgen
 
-## The kinda, maybe, sorta i**egal thingy.
-## Written by anson in June 2020.
+The kinda, maybe, sorta i**egal thingy.
+Written by anson in June 2020.
 
 This terminal application allows you to generate
 OEM and CD keys of a specific variety, reminiscent
@@ -14,12 +14,13 @@ https://medium.com/@dgurney/so-you-want-to-generate-license-keys-for-old-microso
 
 ### v.1.0.0 (First release)
 
+(June 2020)
 Run this application at the command line and it
 will generate one legal OEM key and one legal CD key,
 free of charge.
 
 ### v.1.0.2
 
-(September 16, 2023)
+(September 18, 2023)
 At the moment, code is identical and will be
 updated at a future point in time. Stay tuned.
