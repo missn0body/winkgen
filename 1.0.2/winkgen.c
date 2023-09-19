@@ -1,313 +1,155 @@
-// Lets generate Windows 95-era licensing keys!
-// https://medium.com/@dgurney/so-you-want-to-generate-license-keys-for-old-microsoft-products-a355c8bf5408
-
-// 5/28/20 - Yay! generating Windows CD keys works! I've ironed out most of the possible bugs,
-//           except for one where the program can not generate zeros in the keys, due to the way
-//           I was converting my digit arrays into full integers, long story short, 0 * 1000 is
-//           still zero, so there are no zeros appearing in the generated license keys. Going
-//           to work on OEM keys tomorrow, I'm sleepy.
-
-// 6/3/20 - Yay again! I've finished OEM keys and made all site generations their own function
-//          so it could be called multiple times in the case the user wants more than one
-//          generated. Ironed out all bugs, I'll start implementing command-line arguments
-//          and bringing it all together in the main() function. It's been nice.
-
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
+#include <string.h>
+#include <stdint.h>
 
-const char *VERSION = "v. 1.0.2.";
+// So, a primitive is composed of bits, 8 bits
+// to a byte, and a character is (usually) guarenteed
+// to be a single byte. A bit can either be on or off.
+// Which means, with a single character, you've got
+// a set of 8 booleans to use as flags, which I think
+// is really really neat.
 
+#define VERBOSE		(1 << 1)
+#define OEMMODE		(1 << 2)
+#define CDMODE		(1 << 3)
+#define MULTI		(1 << 4)
+#define ANSI		(1 << 5)
 
-typedef int _bool;
-enum { TRUE = 0, FALSE = 1};
+// ANSI escape codes, to use for color output, cause
+// I quite like colors in my terminal :)
+#define RED		"\033[30;101m"
+#define BLUE    	"\033[34m"
+#define GREEN   	"\033[32m"
+#define RESET		"\033[0m"
 
+// We're not using "char", just in case there's some
+// dystopian future where they changed the definition
+// of "char". Might be just bias, but I put more trust
+// in stdint.h's typedefs.
+typedef uint8_t flag_t;
+static flag_t status = 0;
 
-int random_int(int minimum, int maximum)
+const char *errorMes[] =
 {
-    return (int)(rand() % ((maximum - minimum) + 1)) + minimum;
+	"inexplicable",
+	"too few arguments",
+	"unknown option",
+	"missing option argument",
+	"no number given"
+};
+
+// Quick mnemonics for indexing the above array.
+enum { INX = 0, ARG, UNK, MOA, NNG };
+
+// This function is not meant to be called directly, unless you
+// want to provide a file and line number directly instead of
+// nifty GCC extensions.
+static inline void _error(char *file, int line, int index, flag_t *status)
+{
+	if((*status & ANSI) != 0) fprintf(stderr, "%s(%s:%d)%s %s\n", RED, file, line, RESET, errorMes[index]);
+	else			  fprintf(stderr, "(%s:%d) %s\n", file, line, errorMes[index]);
+	return;
 }
 
-/////////////////////////////////////////////////////////////////
-// CD FUNCTIONS
-/////////////////////////////////////////////////////////////////
+// Rather I prefer you call this, unless you can't.
+#define error(x)	_error(__FILE__, __LINE__, x, &status)
 
-int cdFirstSite(_bool isVerbose)
-{
-    _bool passesFirstTest = FALSE;      // Hasn't passed the test since we haven't given it yet.
+//////////////////////////////////////////////////////////////
+// IMPORTANT FUNCTIONS BEGIN HERE
+//////////////////////////////////////////////////////////////
 
-    // The first site can not be any of these numbers.
-    const int firstSiteLookUp[] =
-    {
-        333, 444, 555, 666, 777, 888, 999
-    };
+void genOEM(void) { return; }
+void genCD(void) { return; }
 
-    int firstSite[3];
-    int compiledFirstSite = 0;
-
-    while(passesFirstTest == FALSE)
-    {
-        firstSite[0] = random_int(1, 9);
-        firstSite[1] = random_int(1, 9);
-        firstSite[2] = random_int(1, 9);
-
-        compiledFirstSite = (firstSite[0] * 100) + (firstSite[1] * 10) + firstSite[2];
-        if(isVerbose == TRUE)
-            printf("compiled first site is \"%d\"\n", compiledFirstSite);
-
-        int i, lookIndex;
-        for(i = 0; i < 7; i++)
-        {
-            lookIndex = firstSiteLookUp[i];
-            if(compiledFirstSite == lookIndex)
-            {
-                if(isVerbose == TRUE)
-                    fprintf(stderr, "compiled site \"%d\" failed test. retrying...\n", compiledFirstSite);
-                break;
-            }
-        }
-
-        if(compiledFirstSite != lookIndex)
-            passesFirstTest = TRUE;
-
-    }
-
-    if(isVerbose == TRUE)
-        printf("compiled site \"%d\" passes first test!\n", compiledFirstSite);
-
-    return compiledFirstSite;
-}
-
-long int cdSecondSite(_bool isVerbose)
-{
-
-    long int secondSite[7];
-    long int compiledSecondSite = 0;
-
-    int sumOfDigits = 0;
-
-    _bool passesSecondTest = FALSE;
-
-    while(passesSecondTest == FALSE)
-    {
-        int i;
-
-        // Last site is 7 digits long, so we'll do our assigning in a loop.
-        for(i = 0; i <= 5; i++)
-        {
-            secondSite[i] = random_int(1, 9);
-        }
-
-        secondSite[6] = random_int(1, 7);       // Windows checks for the last digit. Must not be 0 or >=8
-
-        // Same for our compiling.
-        // Trying to fix a bug that I believe is in the compiling of the
-        // array, let's try the repetitive and dirty way I did in the
-        // first site.
-
-        compiledSecondSite = (secondSite[0] * 1000000) +
-                             (secondSite[1] * 100000 ) +
-                             (secondSite[2] * 10000  ) +
-                             (secondSite[3] * 1000   ) +
-                             (secondSite[4] * 100    ) +
-                             (secondSite[5] * 10     ) +
-                              secondSite[6];
-
-        if(isVerbose == TRUE)
-            printf("compiled second site is \"%ld\"\n", compiledSecondSite);
-
-        // And now let's sum up the digits
-        // The digits in question must not be divisible by 7,
-        // or else we run the thing over again.
-        int digit = 0;
-        long int placeHolder = compiledSecondSite;
-
-        while(placeHolder > 0)
-        {
-            digit = (placeHolder % 10);
-            sumOfDigits += digit;
-            placeHolder /= 10;
-        }
-
-        if(sumOfDigits % 7 == 0)
-            passesSecondTest = TRUE;
-        else
-        {
-            if(isVerbose == TRUE)
-                fprintf(stderr, "compiled site \"%ld\" failed test. retrying...\n", compiledSecondSite);
-        }
-
-    }
-
-    if(isVerbose == TRUE)
-        printf("compiled site \"%ld\" passes second test!\n", compiledSecondSite);
-
-    return compiledSecondSite;
-}
-
-/////////////////////////////////////////////////////////////////
-// OEM FUNCTIONS
-/////////////////////////////////////////////////////////////////
-
-// todo, prototype in main() already, sooooo
-
-unsigned int oemFirstSite(_bool isVerbose)
-{
-    // OEM codes have 3 randomized sites. First one begins below.
-    int firstSite[5];
-    unsigned int compiledFirstSite = 0;
-
-    // First 3 digits are actually part of a date.
-    firstSite[0] = random_int(1, 3);
-    firstSite[1] = random_int(1, 6);                // 111 to 366, the exact day.
-    firstSite[2] = random_int(1, 6);
-
-    // The last two digits are a date, ranging from 95 to 03.
-    // having a zero in our keys will confuse the compiling method
-    // I have so only 95 to 99 will be supported. This also makes the
-    // switch() statement shorter.
-
-    int choice = random_int(1, 5);
-    switch(choice)
-    {
-        case 1: firstSite[3] = 9; firstSite[4] = 5; break;
-        case 2: firstSite[3] = 9; firstSite[4] = 6; break;
-        case 3: firstSite[3] = 9; firstSite[4] = 7; break;
-        case 4: firstSite[3] = 9; firstSite[4] = 8; break;
-        case 5: firstSite[3] = 9; firstSite[4] = 9; break;
-    }
-
-    // Compiling the first site.
-    compiledFirstSite = (firstSite[0] * 10000) +
-                        (firstSite[1] * 1000 ) +
-                        (firstSite[2] * 100  ) +
-                        (firstSite[3] * 10   ) +
-                         firstSite[4];
-
-    // There is no after-generation checking here, so it goes as is.
-    if(isVerbose == TRUE)
-        printf("compiled first site is \"%d\"\n", compiledFirstSite);
-
-    return compiledFirstSite;
-}
-
-long int oemThirdSite(_bool isVerbose)
-{
-    // This is the same as the second site of the CD key,
-    // except the first digit needs to be a zero.
-
-    // What we are going to do is generate the rest of
-    // the key and then add the zero after the fact.
-    // We only have to worry about the 6 digits being
-    // divisible by 7 since zero doesn't affect a sum.
-
-    int thirdSite[6];
-    long int compiledThirdSite = 0;
-
-    int sumOfDigits = 0;
-    _bool passesThirdTest = FALSE;
-
-    while(passesThirdTest == FALSE)
-    {
-        int i;
-
-        // Same as last time. Too long, loop time.
-        for(i = 0; i < 6; i++)
-        {
-            thirdSite[i] = random_int(1, 9);
-        }
-
-        compiledThirdSite = (thirdSite[0] * 100000) +
-                            (thirdSite[1] * 10000 ) +
-                            (thirdSite[2] * 1000  ) +
-                            (thirdSite[3] * 100   ) +
-                            (thirdSite[4] * 10    ) +
-                             thirdSite[5];
-
-        if(isVerbose == TRUE)
-            printf("compiled third site is \"%ld\"\n", compiledThirdSite);
-
-        int digit = 0;
-        long int placeholder = compiledThirdSite;
-
-        while(placeholder > 0)
-        {
-            digit = (placeholder % 10);
-            sumOfDigits += digit;
-            placeholder /= 10;
-        }
-
-        if(sumOfDigits % 7 == 0)
-            passesThirdTest = TRUE;
-        else
-        {
-            if(isVerbose == TRUE)
-                fprintf(stderr, "compiled site \"%ld\" failed test. retrying...\n", compiledThirdSite);
-        }
-
-    }
-
-    if(isVerbose == TRUE)
-        printf("compiled site \"%ld\" passes test!\n", compiledThirdSite);
-
-    return compiledThirdSite;
-}
-
-unsigned int oemFourthSite(_bool isVerbose)
-{
-    // The fourth site is just random numbers, as long as it is
-    // five digits.
-
-    int fourthSite[5];
-    unsigned int compiledFourthSite = 0;
-
-    int i;
-    for(i = 0; i < 5; i++)
-    {
-        fourthSite[i] = random_int(1, 9);
-    }
-
-    compiledFourthSite = (fourthSite[0] * 10000) +
-                         (fourthSite[1] * 1000 ) +
-                         (fourthSite[2] * 100  ) +
-                         (fourthSite[3] * 10   ) +
-                          fourthSite[4];
-
-    if(isVerbose == TRUE)
-        printf("compiled fourth site is \"%d\"\n", compiledFourthSite);
-
-    return compiledFourthSite;
-}
-
-/////////////////////////////////////////////////////////////////
-// main()
-/////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+// IMPORTANT FUNCTIONS END HERE
+//////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[])
 {
-    srand(time(NULL));
+	if(argc < 2) { error(ARG); exit(EXIT_FAILURE); }
+	int c;
+	int times = 0;
 
-    // And now here is the generating part.
-    _bool verboseMode = FALSE;
+	// Iterate through all arguments sent, while making sure
+	// that they start with a dash.
+	while(--argc > 0 && (*++argv)[0] == '-')
+	{
+		// If there's another dash, then it's a long option.
+		// Move the pointer up 2 places and compare the word itself.
+		if((*argv)[1] == '-')
+		{
+			// Using continue statements here so that the user
+			// can use both single character and long options
+			// simultaniously, and the loop can test both.
+			if(strcmp((*argv) + 2, "verbose") == 0) { status |= VERBOSE; continue; }
+			if(strcmp((*argv) + 2, "oem") 	  == 0) { status |= OEMMODE; continue; }
+			if(strcmp((*argv) + 2, "cd") 	  == 0) { status |= CDMODE; continue; }
+			if(strcmp((*argv) + 2, "ansi") 	  == 0) { status |= ANSI; continue; }
+			// The "multi" or "m" option requires a number.
+			// Let's make sure that we get that number.
+			if(strcmp((*argv) + 2, "multi") == 0)
+			{
+				char buffer[20];
+				printf("How many keys to generate? : ");
 
-    unsigned int firstOEM, fourthOEM;
-    const char *secondOEM = "OEM";
-    long int thirdOEM;
+				if(fgets(buffer, sizeof(buffer), stdin) == NULL || buffer[0] == '\r' || buffer[0] == '\n')
+				{
+					error(NNG);
+					// We'll allow the program to look for more arguments,
+					// If you don't put a number here, then the program will
+					// simply ignore your input.
+					continue;
+				}
+				sscanf(buffer, "%d", &times);
+				continue;
+			}
+		}
+		while((c = *++argv[0]))
+		{
+			// Single character option testing here.
+			switch(c)
+			{
+				case 'v': status |= VERBOSE; break;
+				case 'o': status |= OEMMODE; break;
+				case 'c': status |= CDMODE;  break;
+				//case 'm': status |= MULTI;   break;
+				case 'a': status |= ANSI;    break;
+				// This error flag can either be set by a
+				// completely unrelated character inputted,
+				// or you managed to put -option instead of
+				// --option.
+				default : error(UNK); exit(EXIT_FAILURE);
+			}
+		}
+	}
 
-    int firstCD;
-    long int secondCD;
+	// whoops you get lots of info now
+	if((status & VERBOSE) != 0)
+	{
+		if((status & ANSI) != 0) printf("%sANSI mode is on.\n%s", GREEN, RESET);
+		printf("%sVerbose flag is set.%s\n", (status & ANSI) != 0 ? GREEN : "",
+						     (status & ANSI) != 0 ? RESET : "");
+	}
 
-    firstOEM    = oemFirstSite(verboseMode);
-    thirdOEM    = oemThirdSite(verboseMode);
-    fourthOEM   = oemFourthSite(verboseMode);
+	// If you don't specify whether you want an OEM key or CD key,
+	// Then you get both.
+	if(((status & OEMMODE) == 0) && ((status & CDMODE) == 0))
+	{
+		if((status & VERBOSE) != 0) puts("No type specified, winkgen will generate both kinds of keys.");
+		status |= OEMMODE;
+		status |= CDMODE;
+	}
 
-    printf("\"%d-%s-0%ld-%d\"\n", firstOEM, secondOEM, thirdOEM, fourthOEM);
+	if((status & MULTI) != 0)
+	{
+		if((status & ANSI) != 0) printf("%sThis program will generate %d keys.%s\n", GREEN, times, RESET);
+		else printf("This program will generate %d keys.\n", times);
+	}
 
-    firstCD     = cdFirstSite(verboseMode);
-    secondCD    = cdSecondSite(verboseMode);
+	if((status & OEMMODE) != 0) genOEM();
+	if((status & CDMODE) != 0) genCD();
 
-    printf("\"%d-%ld\"\n", firstCD, secondCD);
-
-    return 0;
+	exit(EXIT_SUCCESS);
 }
