@@ -1,6 +1,6 @@
 # winkgen
 
-A sly little key generator, *wink*
+A sly little key generator, *wink*.
 First written by anson in June 2020.
 
 This terminal application allows you to generate
