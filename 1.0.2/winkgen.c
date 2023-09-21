@@ -1,7 +1,8 @@
-// Lets generate Windows 95-era licensing keys!
-// https://medium.com/@dgurney/so-you-want-to-generate-license-keys-for-old-microsoft-products-a355c8bf5408
+// Lets generate 90's-era licensing keys!
+// https://gurney.dev/posts/mod7/
+// https://github.com/missn0body/winkgen
 
-// 5/28/20 - Yay! generating Windows CD keys works! I've ironed out most of the possible bugs,
+// 5/28/20 - Yay! generating W*****s CD keys works! I've ironed out most of the possible bugs,
 //           except for one where the program can not generate zeros in the keys, due to the way
 //           I was converting my digit arrays into full integers, long story short, 0 * 1000 is
 //           still zero, so there are no zeros appearing in the generated license keys. Going
@@ -20,6 +21,13 @@
 
 // 9/20/23 - Finally finished the OEM key generating section and I seemed to have ironed out
 //	     all of the bugs, but please tell me if there still are some.
+
+// 9/21/23 - Fixed a bug where the third section of the OEM key generating section wasn't
+//	     actually summing up digits at all.
+// 2.
+//	     Finished the CD key generating section and it seems to work alright, I'm sure people
+//	     will let me know if there are. There doesn't seem to be much else to add to this
+//	     program, and if there is, I'll add it in another version later.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +54,8 @@
 #define BLUE    	"\033[34m"
 #define GREEN   	"\033[32m"
 #define RESET		"\033[0m"
+
+const char *VERSION = "v. 1.0.2.";
 
 // We're not using "char", just in case there's some
 // dystopian future where they changed the definition
@@ -115,22 +125,19 @@ void genOEM(flag_t *input)
 
 	// The digits of the third section must be divisible
 	// by 7, and the last digit must not be 0 or greater than 7
-	unsigned int test = randomInt(111111, 999996), lastDigit = 0;
-	int sum = 0, holder = 0;
+	unsigned int test = 0, sum = 0, holder = 0;
 	for(int tmi = 0; ; tmi++)
 	{
 		test = randomInt(111111, 999996);
-		lastDigit = (test % 10);
 		// Check for digits in order to break.
-		if(lastDigit <= 7 && lastDigit >= 1)
+		if((test % 10) <= 7 && (test % 10) >= 1)
 		{
 			holder = test;
-			while(holder != 0)
-			{
-				sum += (holder % 10);
-				holder /= 10;
-			}
-
+			// Iterate through the digits and
+			// sum them up...
+			while(holder != 0) { sum += (holder % 10); holder /= 10; }
+			// ... and then see if it's divisible
+			// by seven.
 			if(sum % 7 == 0) break;
 		}
 
@@ -166,11 +173,80 @@ void genOEM(flag_t *input)
 void genCD(flag_t *input)
 {
 	if((*input & VERBOSE) != 0)
-        {
-                printf("%sGenerating CD key...%s\n", ((*input & ANSI) != 0) ? BLUE : "",
-                                                      ((*input & ANSI) != 0) ? RESET : "");
-        }
+                printf("%sGenerating CD key...%s\n", greenIfColor(*input), resetIfColor(*input));
 
+	// Plus one for null terminator.
+	char returnValue[12], first[4];
+	for(int tmi = 0; ; tmi++)
+	{
+		first[0] = randomInt(0, 9) + '0';
+		first[1] = randomInt(0, 9) + '0';
+		first[2] = randomInt(0, 8) + '0';
+		if(first[3] != '\0') first[3] = '\0';
+		// Really what is checked is if the first
+		// section is 333, 444, 555, 666, 777, 888,
+		// or 999, but I'm gonna ban all repeating
+		// numbers just to be safe.
+		if(first[0] != first[1] &&
+		   first[0] != first[2] &&
+		   first[1] != first[2])
+			break;
+
+		// Alert the user what is happening if they
+		// ask for it.
+		if(tmi == 10 && (*input & VERBOSE) != 0)
+		{
+			// Again, you don't want your screen filled up with numbers.
+			alert(*input, "Verbose printing has been halted, this is for your own good.");
+		}
+		else if(tmi <= 9 && (*input & VERBOSE) != 0)
+                        printf("%sTesting first CD section \"%s\"...%s\n", greenIfColor(*input), first, resetIfColor(*input));
+
+		// The PRNG is seeded by the time, so wait until we get a new seed.
+                sleep(1);
+	}
+
+	first[3] = '\0'; // Just to be safe.
+	if((*input & VERBOSE) != 0)
+                printf("%sGenerated first CD section \"%s\"...%s\n", blueIfColor(*input), first, resetIfColor(*input));
+
+	// The second section of the CD key is where the mod7
+	// algorithm takes place. Much like the previous function,
+	// the digits added up must be divisible by 7, and the last
+	// digit can not be 0 or greater than 7.
+
+	unsigned int second = 0, sum = 0, holder = 0;
+	for(int tmi = 0; ; tmi++)
+	{
+		second = randomInt(1111111, 9999997);
+		if((second % 10) >= 1 && (second % 10) <= 7)
+		{
+			// Sum up all the digits.
+			holder = second;
+			while(holder != 0) { sum += (holder % 10); holder /= 10; }
+			// If it's divisible by 7, hurray!
+			if((sum % 7) == 0) break;
+		}
+
+		// Alert the user what is happening if they
+                // ask for it.
+                if(tmi == 10 && (*input & VERBOSE) != 0)
+                {
+                        // Again, you don't want your screen filled up with numbers.
+                        alert(*input, "Verbose printing has been halted, this is for your own good.");
+                }
+                else if(tmi <= 9 && (*input & VERBOSE) != 0)
+                        printf("%sTesting second CD section \"%u\"...%s\n", greenIfColor(*input), second, resetIfColor(*input));
+
+		// The PRNG is seeded by the time, so wait until we get a new seed.
+                sleep(1);
+	}
+
+	if((*input & VERBOSE) != 0)
+                printf("%sGenerated second CD section \"%u\"...%s\n", blueIfColor(*input), second, resetIfColor(*input));
+
+	snprintf(returnValue, sizeof(returnValue), "%s-%u", first, second);
+	printf("%s\n", returnValue);
 	return;
 }
 
@@ -178,10 +254,18 @@ void genCD(flag_t *input)
 // IMPORTANT FUNCTIONS END HERE
 //////////////////////////////////////////////////////////////
 
+void showUsage()
+{
+	printf("winkgen (%s): a sly key generator by anson ;)\n", VERSION);
+        puts("Usage: winkgen -v (--verbose) -a (--ansi) -o (--oem) -c (--cd) -h (--help)\n");
+        puts("Reminder, winkgen will not operate without command-line arguments,");
+        puts("so use winkgen -o or winkgen -c to start generating keys.");
+	return;
+}
+
 int main(int argc, char *argv[])
 {
 	srand(time(NULL));
-
 	if(argc < 2) { error(ARG); exit(EXIT_FAILURE); }
 	int c;
 
@@ -196,6 +280,7 @@ int main(int argc, char *argv[])
 			// Using continue statements here so that the user
 			// can use both single character and long options
 			// simultaniously, and the loop can test both.
+			if(strcmp((*argv) + 2, "help") == 0)    { showUsage(); exit(EXIT_SUCCESS); }
 			if(strcmp((*argv) + 2, "verbose") == 0) { status |= VERBOSE; continue; }
 			if(strcmp((*argv) + 2, "oem") 	  == 0) { status |= OEMMODE; continue; }
 			if(strcmp((*argv) + 2, "cd") 	  == 0) { status |= CDMODE; continue; }
@@ -206,6 +291,7 @@ int main(int argc, char *argv[])
 			// Single character option testing here.
 			switch(c)
 			{
+				case 'h': showUsage(); exit(EXIT_SUCCESS);
 				case 'v': status |= VERBOSE; break;
 				case 'o': status |= OEMMODE; break;
 				case 'c': status |= CDMODE;  break;
@@ -235,7 +321,7 @@ int main(int argc, char *argv[])
 		status |= CDMODE;
 	}
 
-	puts("You may need to wait a several minutes or so to generate a key,\nplease be patient...");
+	puts("You may need to wait a several seconds or so to generate a key,\nplease be patient...");
 	if((status & OEMMODE) != 0) genOEM(&status);
 	if((status & CDMODE) != 0) genCD(&status);
 
