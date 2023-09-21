@@ -26,7 +26,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <unistd.h>
+#include <unistd.h> // used for sleep()
 
 // So, a primitive is composed of bits, 8 bits
 // to a byte, and a character is (usually) guarenteed
@@ -75,19 +75,22 @@ void _error(char *file, int line, int index, flag_t *status)
 // IMPORTANT FUNCTIONS BEGIN HERE
 //////////////////////////////////////////////////////////////
 
+#define greenIfColor(x)	((((x) & ANSI) != 0) ? GREEN : "")
+#define redIfColor(x)	((((x) & ANSI) != 0) ? RED : "")
+#define blueIfColor(x)	((((x) & ANSI) != 0) ? BLUE : "")
+#define resetIfColor(x)	((((x) & ANSI) != 0) ? RESET : "")
+
+#define alert(x, ...)	fprintf(stderr, "%s%s%s\n", redIfColor(x), __VA_ARGS__, resetIfColor(x))
+
 static inline unsigned int randomInt(unsigned int minimum, unsigned int maximum)
 {
-	srand(time(NULL));
 	return (unsigned int)(rand() % ((maximum - minimum) + 1)) + minimum;
 }
 
 void genOEM(flag_t *input)
 {
 	if((*input & VERBOSE) != 0)
-        {
-                printf("%sGenerating OEM key...%s\n", ((*input & ANSI) != 0) ? BLUE : "",
-                                                      ((*input & ANSI) != 0) ? RESET : "");
-        }
+                printf("%sGenerating OEM key...%s\n", greenIfColor(*input), resetIfColor(*input));
 
 	// Plus one for null terminator
 	char returnValue[24];
@@ -95,73 +98,66 @@ void genOEM(flag_t *input)
 
 	// First three numbers is a day, between one and 366.
 	for(int i = 0; i < 3; i++) first[i] = randomInt((i >= 2) ? 1 : 0, (i >= 2) ? 6 : 3) + '0';
+
 	// Second two numbers are a year, from 95 to 03.
 	first[3] = (randomInt(0, 1) == 1) ? ('9') : ('0');
 	if(first[3] == '9') 	 first[4] = randomInt(5, 9) + '0';
 	else if(first[3] == '0') first[4] = randomInt(0, 3) + '0';
+
 	// Add null terminator.
 	first[5] = '\0';
 	// Verbose (debug) print.
 	if((*input & VERBOSE) != 0)
-	{
-		printf("%sGenerated first OEM section \"%s\"...%s\n", ((*input & ANSI) != 0) ? BLUE : "",
-								      first,
-						      		      ((*input & ANSI) != 0) ? RESET : "");
-        }
+		printf("%sGenerated first OEM section \"%s\"...%s\n", blueIfColor(*input), first, resetIfColor(*input));
 
 	// The second section is really simple. But we'll save
 	// it for later.
 
 	// The digits of the third section must be divisible
 	// by 7, and the last digit must not be 0 or greater than 7
-	int test = randomInt(111111, 999996), tmi = 0, lastDigit = 0;
-	while(1 > 0)
+	unsigned int test = randomInt(111111, 999996), lastDigit = 0;
+	int sum = 0, holder = 0;
+	for(int tmi = 0; ; tmi++)
 	{
 		test = randomInt(111111, 999996);
 		lastDigit = (test % 10);
-
+		// Check for digits in order to break.
 		if(lastDigit <= 7 && lastDigit >= 1)
-			if(test % 7 == 0)
-				break;
+		{
+			holder = test;
+			while(holder != 0)
+			{
+				sum += (holder % 10);
+				holder /= 10;
+			}
+
+			if(sum % 7 == 0) break;
+		}
 
 		if(tmi == 10 && (*input & VERBOSE) != 0)
 		{
 			// Seriously, it is. You don't want to have your entire screen filled to the brim.
-			printf("%sVerbose printing has been halted due to increasing test counts, this is for your own good.%s\n",
-												((*input & ANSI) != 0) ? RED : "",
-						      		    	      			((*input & ANSI) != 0) ? RESET : "");
+			alert(*input, "Verbose printing has been halted, this is for your own good.");
 		}
 		else if(tmi <= 9 && (*input & VERBOSE) != 0)
-		{
-			printf("%sTesting third OEM section \"%u\"...%s\n", ((*input & ANSI) != 0) ? GREEN : "",
-								    	    test,
-						      		    	    ((*input & ANSI) != 0) ? RESET : "");
-		}
+			printf("%sTesting third OEM section \"%u\"...%s\n", greenIfColor(*input), test, resetIfColor(*input));
 
 		// The PRNG is seeded by the time, so wait until we get a new seed.
 		sleep(1);
-		tmi++;
 	}
 
 	// Another debug print.
 	if((*input & VERBOSE) != 0)
-	{
-		printf("%sGenerated third OEM section \"%u\"...%s\n", ((*input & ANSI) != 0) ? BLUE : "",
-								      test,
-						      		      ((*input & ANSI) != 0) ? RESET : "");
-        }
+		printf("%sGenerated third OEM section \"%u\"...%s\n", blueIfColor(*input), test, resetIfColor(*input));
 
 	// The fourth section is just random numbers.
 	for(int i = 0; i < 6; i++) fourth[i] = randomInt(0, 9) + '0';
 	fourth[5] = '\0';
 
 	if((*input & VERBOSE) != 0)
-	{
-		printf("%sGenerated fourth OEM section \"%s\"...%s\n", ((*input & ANSI) != 0) ? BLUE : "",
-								       fourth,
-						      		       ((*input & ANSI) != 0) ? RESET : "");
-        }
+		printf("%sGenerated fourth OEM section \"%s\"...%s\n", blueIfColor(*input), fourth, resetIfColor(*input));
 
+	// Assemble the final key
 	snprintf(returnValue, sizeof(returnValue), "%s-OEM-0%u-%s", first, test, fourth);
 	printf("%s\n", returnValue);
 	return;
@@ -184,6 +180,8 @@ void genCD(flag_t *input)
 
 int main(int argc, char *argv[])
 {
+	srand(time(NULL));
+
 	if(argc < 2) { error(ARG); exit(EXIT_FAILURE); }
 	int c;
 
@@ -225,8 +223,7 @@ int main(int argc, char *argv[])
 	if((status & VERBOSE) != 0)
 	{
 		if((status & ANSI) != 0) printf("%sANSI mode is on.\n%s", GREEN, RESET);
-		printf("%sVerbose flag is set.%s\n", (status & ANSI) != 0 ? GREEN : "",
-						     (status & ANSI) != 0 ? RESET : "");
+		printf("%sVerbose flag is set.%s\n", greenIfColor(status), resetIfColor(status));
 	}
 
 	// If you don't specify whether you want an OEM key or CD key,
