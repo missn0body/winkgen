@@ -23,6 +23,7 @@ enum : char { VERBOSE = (1 << 1), QUIET = (1 << 2), DOUBLECHK = (1 << 4) };
 // function will be called after generation, which should
 // be redundant.
 
+// Plus one for null character
 static constexpr unsigned short TCDKEY = 11;
 static constexpr unsigned short ECDKEY = 12;
 static constexpr unsigned short OEMLEN = 21;
