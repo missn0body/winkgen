@@ -11,10 +11,17 @@ extern "C" {
 	Made by anson in 2024, see LICENSE for related details
 */
 
-#include "include.h"
+#include <stdio.h>
+#include <stdint.h>
 
 // Values representing individual bits to switch on or off in .flags
-enum : char { VEBOSE = (1 << 1), QUIET = (1 << 2), NOLENERR = (1 << 3), DOUBLECHK = (1 << 4) };
+enum : char { VERBOSE = (1 << 1), QUIET = (1 << 2), DOUBLECHK = (1 << 4) };
+
+// winkgen prints some diagnostic information by default.
+// VERBOSE prints even more, QUIET disables all output.
+// If DOUBLECHK is enabled, then a corresponding verify_*
+// function will be called after generation, which should
+// be redundant.
 
 static constexpr unsigned short TCDKEY = 11;
 static constexpr unsigned short ECDKEY = 12;
